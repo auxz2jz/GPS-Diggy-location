@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Dig Point Photo Logger</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #101214;
+      --panel: #1a1e22;
+      --text: #f2f4f5;
+      --muted: #aeb7bf;
+      --accent: #2f80ed;
+      --danger: #c0392b;
+      --border: #343a40;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      padding: 14px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.25rem;
+    }
+
+    header p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 12px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 10px;
+    }
+
+    button, .capture-label {
+      min-height: 48px;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .primary, .capture-label {
+      background: var(--accent);
+      color: white;
+    }
+
+    .secondary {
+      background: #363d45;
+      color: white;
+    }
+
+    .danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    input[type="file"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    input[type="text"], textarea, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: #111418;
+      color: var(--text);
+      border-radius: 9px;
+      padding: 11px;
+      font-size: 1rem;
+      margin-top: 6px;
+    }
+
+    label.text-label {
+      display: block;
+      margin: 10px 0;
+      font-weight: 600;
+    }
+
+    #status {
+      padding: 9px 10px;
+      border-radius: 8px;
+      background: #111418;
+      color: var(--muted);
+      margin-top: 10px;
+      min-height: 40px;
+    }
+
+    #preview {
+      display: none;
+      width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: 10px;
+      margin-top: 10px;
+      background: #000;
+    }
+
+    #map {
+      height: 420px;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .point {
+      border-top: 1px solid var(--border);
+      padding: 12px 0;
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .point:first-child {
+      border-top: 0;
+    }
+
+    .thumb {
+      width: 90px;
+      height: 90px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #000;
+    }
+
+    .point-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .small {
+      font-size: .87rem;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .point-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .point-actions button, .point-actions a {
+      min-height: 36px;
+      padding: 7px 10px;
+      border-radius: 7px;
+      border: 0;
+      font-size: .86rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 20px 4px;
+    }
+
+
+    details.settings {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    details.settings summary { cursor: pointer; font-weight: 700; font-size: 1.05rem; }
+    .setting-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 0; border-top:1px solid var(--border); }
+    .setting-row:first-of-type { margin-top:10px; }
+    .setting-row label { font-weight:600; }
+    .setting-row input[type="checkbox"] { width:22px; height:22px; }
+    .thumb { cursor: zoom-in; }
+    #photoModal { display:none; position:fixed; inset:0; z-index:5000; background:rgba(0,0,0,.92); padding:16px; align-items:center; justify-content:center; }
+    #photoModal.open { display:flex; }
+    #photoModal img { max-width:96vw; max-height:90vh; object-fit:contain; border-radius:10px; }
+    #photoModal button { position:absolute; top:14px; right:14px; min-height:42px; background:#222; color:white; border:1px solid #555; border-radius:10px; padding:9px 12px; font-size:1rem; }
+
+    @media (max-width: 520px) {
+      .buttons { grid-template-columns: 1fr; }
+      #map { height: 350px; }
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <h1>Dig Point Photo Logger</h1>
+  <p>Photo + GPS coordinates + timestamp + map pin</p>
+</header>
+
+<main>
+  <section class="card">
+    <label class="text-label">
+      Location
+      <select id="pointLocation">
+        <option value="">Unassigned</option>
+      </select>
+    </label>
+
+    <label class="text-label">
+      Notes
+      <textarea id="notes" rows="2" placeholder="Optional notes"></textarea>
+    </label>
+
+    <div class="buttons">
+      <label class="capture-label" for="photoInput">📷 Take Photo</label>
+      <button id="gpsBtn" class="secondary" type="button">📍 Refresh GPS</button>
+    </div>
+
+    <input id="photoInput" type="file" accept="image/*" capture="environment">
+
+    <img id="preview" alt="Selected photo preview">
+
+    <div id="status">Ready. Take a photo to begin.</div>
+
+    <div style="margin-top:10px">
+      <button id="saveBtn" class="primary" type="button" style="width:100%" disabled>
+        Save Dig Point
+      </button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div id="map"></div>
+    <div class="small" style="margin-top:8px">
+      Use the layer control to switch between Street Map, current satellite imagery,
+      and High Detail Aerial imagery. The high-detail layer may be older, but can be
+      clearer for precise placement. Pins are draggable so you can correct the exact
+      Dig Point location.
+    </div>
+  </section>
+
+  <details class="settings">
+    <summary>⚙️ Settings</summary>
+    <div class="settings-scroll">
+      <div class="setting-row">
+        <div><label for="showEditTitle">Show “Edit Title” button</label><div class="small">Turn title editing on or off for saved points.</div></div>
+        <input id="showEditTitle" type="checkbox" checked>
+      </div>
+      <div class="setting-row">
+        <div><label for="showSavePhoto">Show “Save Photo” button</label><div class="small">Turn the Save Photo button on or off for saved points.</div></div>
+        <input id="showSavePhoto" type="checkbox" checked>
+      </div>
+      <div class="setting-row">
+        <div><label for="showDeletePoint">Show “Delete” button</label><div class="small">Turn the Delete button on or off for saved points.</div></div>
+        <input id="showDeletePoint" type="checkbox" checked>
+      </div>
+
+      <div class="location-editor" style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <label class="text-label" for="locationsEditor">Locations</label>
+        <div class="small">Enter one location per line. These appear in the Location dropdown when saving a Dig Point.</div>
+        <textarea id="locationsEditor" placeholder="Example:
+Madera Community Hospital
+Government Center
+Parking Garage"></textarea>
+        <button id="saveLocationsBtn" class="secondary" type="button" style="width:100%;margin-top:8px">Save Locations</button>
+      </div>
+
+      <div class="buttons" style="margin-top:12px">
+        <button id="exportBtn" class="secondary" type="button">Export CSV</button>
+        <label class="capture-label" for="importInput">Import CSV</label>
+        <button id="clearBtn" class="danger" type="button">Delete All Points</button>
+      </div>
+      <input id="importInput" type="file" accept=".csv,text/csv">
+      <div class="small" style="margin-top:8px">CSV import restores titles, locations, coordinates, timestamps, accuracy, and notes. Photos are not stored in CSV files.</div>
+    </div>
+  </details>
+
+  <section class="card">
+    <h2 style="margin-top:0;font-size:1.1rem">Saved Points</h2>
+    <label class="text-label">
+      Show Location
+      <select id="locationFilter">
+        <option value="__all__">All Locations</option>
+        <option value="">Unassigned</option>
+      </select>
+    </label>
+    <div id="log"></div>
+  </section>
+</main>
+
+<div id="photoModal" aria-hidden="true">
+  <button id="closePhotoModal" type="button">Close</button>
+  <img id="modalPhoto" alt="Full-size Dig Point photo">
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+(() => {
+  const DB_NAME = "digPointLogger";
+  const STORE = "points";
+
+  const photoInput = document.getElementById("photoInput");
+  const preview = document.getElementById("preview");
+  const status = document.getElementById("status");
+  const saveBtn = document.getElementById("saveBtn");
+  const gpsBtn = document.getElementById("gpsBtn");
+  const notes = document.getElementById("notes");
+  const pointLocation = document.getElementById("pointLocation");
+  const locationFilter = document.getElementById("locationFilter");
+  const locationsEditor = document.getElementById("locationsEditor");
+  const saveLocationsBtn = document.getElementById("saveLocationsBtn");
+  const log = document.getElementById("log");
+  const showEditTitle = document.getElementById("showEditTitle");
+  const showSavePhoto = document.getElementById("showSavePhoto");
+  const showDeletePoint = document.getElementById("showDeletePoint");
+  const importInput = document.getElementById("importInput");
+  const photoModal = document.getElementById("photoModal");
+  const modalPhoto = document.getElementById("modalPhoto");
+  const closePhotoModal = document.getElementById("closePhotoModal");
+
+  let selectedPhoto = null;
+  let currentPosition = null;
+  let db;
+  let markers = [];
+
+  const map = L.map("map").setView([37.0, -120.0], 7);
+
+  const streetLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 20,
+    attribution: "&copy; OpenStreetMap contributors"
+  });
+
+  const satelliteLayer = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+      maxZoom: 20,
+      attribution: "Imagery &copy; Esri, Vantor, Earthstar Geographics, GIS User Community"
+    }
+  );
+
+  const highDetailAerialLayer = L.tileLayer(
+    "https://clarity.maptiles.arcgis.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+      maxNativeZoom: 22,
+      maxZoom: 22,
+      attribution: "World Imagery (Clarity) &copy; Esri and imagery contributors"
+    }
+  );
+
+  streetLayer.addTo(map);
+
+  L.control.layers(
+    {
+      "Street Map": streetLayer,
+      "Satellite (Current)": satelliteLayer,
+      "High Detail Aerial": highDetailAerialLayer
+    },
+    null,
+    { collapsed: false, position: "topright" }
+  ).addTo(map);
+
+  let pendingMarker = null;
+
+  showEditTitle.checked = localStorage.getItem("digShowEditTitle") !== "false";
+  showSavePhoto.checked = localStorage.getItem("digShowSavePhoto") !== "false";
+  showDeletePoint.checked = localStorage.getItem("digShowDeletePoint") !== "false";
+
+  function getLocations() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("digLocations") || "[]");
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch { return []; }
+  }
+
+  function refreshLocationControls() {
+    const locations = getLocations();
+    const selectedNew = pointLocation.value;
+    const selectedFilter = locationFilter.value;
+    pointLocation.innerHTML = '<option value="">Unassigned</option>';
+    locationFilter.innerHTML = '<option value="__all__">All Locations</option><option value="">Unassigned</option>';
+    locations.forEach(location => {
+      const a = document.createElement("option"); a.value = location; a.textContent = location; pointLocation.appendChild(a);
+      const b = document.createElement("option"); b.value = location; b.textContent = location; locationFilter.appendChild(b);
+    });
+    if ([...pointLocation.options].some(o => o.value === selectedNew)) pointLocation.value = selectedNew;
+    if ([...locationFilter.options].some(o => o.value === selectedFilter)) locationFilter.value = selectedFilter;
+  }
+
+  locationsEditor.value = getLocations().join("\n");
+  refreshLocationControls();
+
+  saveLocationsBtn.addEventListener("click", async () => {
+    const locations = [...new Set(locationsEditor.value.split(/\r?\n/).map(v => v.trim()).filter(Boolean))];
+    localStorage.setItem("digLocations", JSON.stringify(locations));
+    locationsEditor.value = locations.join("\n");
+    refreshLocationControls();
+    setStatus(`${locations.length} location${locations.length === 1 ? "" : "s"} saved.`);
+    await render();
+  });
+
+  locationFilter.addEventListener("change", render);
+  showEditTitle.addEventListener("change", async () => { localStorage.setItem("digShowEditTitle", String(showEditTitle.checked)); await render(); });
+  showSavePhoto.addEventListener("change", async () => { localStorage.setItem("digShowSavePhoto", String(showSavePhoto.checked)); await render(); });
+  showDeletePoint.addEventListener("change", async () => { localStorage.setItem("digShowDeletePoint", String(showDeletePoint.checked)); await render(); });
+  closePhotoModal.addEventListener("click", () => { photoModal.classList.remove("open"); photoModal.setAttribute("aria-hidden","true"); modalPhoto.src=""; });
+  photoModal.addEventListener("click", e => { if (e.target === photoModal) { photoModal.classList.remove("open"); photoModal.setAttribute("aria-hidden","true"); modalPhoto.src=""; } });
+
+  function setStatus(message) {
+    status.textContent = message;
+  }
+
+  function openDb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1);
+
+      request.onupgradeneeded = e => {
+        const database = e.target.result;
+        if (!database.objectStoreNames.contains(STORE)) {
+          database.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+        }
+      };
+
+      request.onsuccess = e => {
+        db = e.target.result;
+        resolve(db);
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function requestGPS() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("This browser does not support GPS/geolocation."));
+        return;
+      }
+
+      setStatus("Getting GPS location…");
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          currentPosition = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy
+          };
+
+          if (pendingMarker) {
+            map.removeLayer(pendingMarker);
+          }
+
+          pendingMarker = L.marker(
+            [currentPosition.latitude, currentPosition.longitude],
+            { draggable: true }
+          ).addTo(map);
+
+          pendingMarker.bindPopup(
+            "<strong>Current Dig Point</strong><br>Drag this pin to the exact location before saving."
+          ).openPopup();
+
+          pendingMarker.on("dragend", () => {
+            const moved = pendingMarker.getLatLng();
+            currentPosition.latitude = moved.lat;
+            currentPosition.longitude = moved.lng;
+            setStatus(
+              `Pin adjusted: ${moved.lat.toFixed(6)}, ${moved.lng.toFixed(6)}. ` +
+              `Tap Save Dig Point when the pin is correct.`
+            );
+          });
+
+          map.setView([currentPosition.latitude, currentPosition.longitude], 19);
+
+          setStatus(
+            `GPS ready: ${currentPosition.latitude.toFixed(6)}, ` +
+            `${currentPosition.longitude.toFixed(6)} ` +
+            `(accuracy ±${Math.round(currentPosition.accuracy)} m). ` +
+            `You can drag the pin to the exact location before saving.`
+          );
+
+          saveBtn.disabled = !selectedPhoto;
+          resolve(currentPosition);
+        },
+        err => {
+          currentPosition = null;
+          saveBtn.disabled = true;
+          reject(new Error(
+            err.code === 1
+              ? "Location permission was denied."
+              : "Could not get GPS location. Try again outdoors."
+          ));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0
+        }
+      );
+    });
+  }
+
+  photoInput.addEventListener("change", async () => {
+    const file = photoInput.files && photoInput.files[0];
+    if (!file) return;
+
+    selectedPhoto = file;
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = "block";
+    saveBtn.disabled = true;
+
+    try {
+      await requestGPS();
+    } catch (e) {
+      setStatus(e.message);
+    }
+  });
+
+  gpsBtn.addEventListener("click", async () => {
+    try {
+      await requestGPS();
+    } catch (e) {
+      setStatus(e.message);
+    }
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    if (!selectedPhoto || !currentPosition) {
+      setStatus("A photo and GPS location are required.");
+      return;
+    }
+
+    saveBtn.disabled = true;
+    setStatus("Saving point…");
+
+    const record = {
+      name: "Dig Point",
+      location: pointLocation.value,
+      notes: notes.value.trim(),
+      timestamp: new Date().toISOString(),
+      latitude: currentPosition.latitude,
+      longitude: currentPosition.longitude,
+      accuracy: currentPosition.accuracy,
+      photoName: selectedPhoto.name || "photo.jpg",
+      photoType: selectedPhoto.type || "image/jpeg",
+      photo: selectedPhoto
+    };
+
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).add(record);
+
+    tx.oncomplete = async () => {
+      setStatus("Point saved.");
+      selectedPhoto = null;
+      currentPosition = null;
+      photoInput.value = "";
+      preview.src = "";
+      preview.style.display = "none";
+      notes.value = "";
+      saveBtn.disabled = true;
+      if (pendingMarker) {
+        map.removeLayer(pendingMarker);
+        pendingMarker = null;
+      }
+      await render();
+    };
+
+    tx.onerror = () => {
+      setStatus("Could not save point. Browser storage may be full.");
+      saveBtn.disabled = false;
+    };
+  });
+
+  function getAllPoints() {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).getAll();
+
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function deletePoint(id) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  function updatePointLocation(id, latitude, longitude) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      const store = tx.objectStore(STORE);
+      const req = store.get(id);
+
+      req.onsuccess = () => {
+        const point = req.result;
+        if (!point) {
+          reject(new Error("Point not found."));
+          return;
+        }
+        point.latitude = latitude;
+        point.longitude = longitude;
+        point.locationAdjusted = true;
+        store.put(point);
+      };
+
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  function updatePointTitle(id, title) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      const store = tx.objectStore(STORE);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        const point = req.result;
+        if (!point) { reject(new Error("Point not found.")); return; }
+        point.name = title || "Dig Point";
+        store.put(point);
+      };
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function render() {
+    let points = await getAllPoints();
+    points.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const selectedLocation = locationFilter.value;
+    if (selectedLocation !== "__all__") points = points.filter(point => (point.location || "") === selectedLocation);
+
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+    log.innerHTML = "";
+
+    if (!points.length) {
+      log.innerHTML = `<div class="empty">${locationFilter.value === "__all__" ? "No points saved yet." : "No saved points at this location."}</div>`;
+      return;
+    }
+
+    const bounds = [];
+
+    points.forEach(point => {
+      const marker = L.marker(
+        [point.latitude, point.longitude],
+        { draggable: true }
+      )
+        .addTo(map)
+        .bindPopup(
+          `<strong>${escapeHtml(point.name || "Dig Point")}</strong><br>` +
+          `${point.location ? escapeHtml(point.location) + "<br>" : ""}` +
+          `${new Date(point.timestamp).toLocaleString()}<br>` +
+          `${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}<br>` +
+          `<em>Drag pin to correct the saved location.</em>`
+        );
+
+      marker.on("dragend", async () => {
+        const moved = marker.getLatLng();
+        await updatePointLocation(point.id, moved.lat, moved.lng);
+        setStatus(
+          `Saved point location updated to ${moved.lat.toFixed(6)}, ${moved.lng.toFixed(6)}.`
+        );
+        await render();
+      });
+
+      markers.push(marker);
+      bounds.push([point.latitude, point.longitude]);
+
+      const row = document.createElement("div");
+      row.className = "point";
+
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.alt = "Dig Point photo";
+      let photoUrl = "";
+      if (point.photo && point.photo.size > 0) {
+        photoUrl = URL.createObjectURL(point.photo);
+        img.src = photoUrl;
+        img.addEventListener("click", () => { modalPhoto.src = photoUrl; photoModal.classList.add("open"); photoModal.setAttribute("aria-hidden","false"); });
+      } else {
+        img.alt = "No photo available";
+        img.style.cursor = "default";
+        img.src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" fill="#222"/><text x="50%" y="50%" fill="#aaa" font-size="18" font-family="sans-serif" text-anchor="middle" dominant-baseline="middle">No Photo</text></svg>');
+      }
+
+      const body = document.createElement("div");
+
+      const title = document.createElement("div");
+      title.className = "point-title";
+      title.textContent = point.name || "Dig Point";
+
+      const detail = document.createElement("div");
+      detail.className = "small";
+      detail.innerHTML =
+        `${point.location ? `Location: ${escapeHtml(point.location)}<br>` : "Location: Unassigned<br>"}` +
+        `${new Date(point.timestamp).toLocaleString()}<br>` +
+        `Lat: ${point.latitude.toFixed(6)}<br>` +
+        `Lon: ${point.longitude.toFixed(6)}<br>` +
+        `GPS accuracy: ±${Math.round(point.accuracy)} m`;
+
+      if (point.notes) {
+        const note = document.createElement("div");
+        note.className = "small";
+        note.style.marginTop = "6px";
+        note.textContent = point.notes;
+        body.append(title, detail, note);
+      } else {
+        body.append(title, detail);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "point-actions";
+
+      const mapLink = document.createElement("a");
+      mapLink.className = "secondary";
+      mapLink.href =
+        `https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}`;
+      mapLink.target = "_blank";
+      mapLink.rel = "noopener";
+      mapLink.textContent = "Open in Maps";
+
+      const photoLink = document.createElement("a");
+      photoLink.className = "secondary";
+      photoLink.href = URL.createObjectURL(point.photo);
+      photoLink.download = `dig-point-${point.id}.jpg`;
+      photoLink.textContent = "Save Photo";
+
+      const zoomBtn = document.createElement("button");
+      zoomBtn.className = "secondary";
+      zoomBtn.type = "button";
+      zoomBtn.textContent = "Show Pin";
+      zoomBtn.addEventListener("click", () => {
+        map.setView([point.latitude, point.longitude], 19);
+        marker.openPopup();
+        document.getElementById("map").scrollIntoView({ behavior: "smooth" });
+      });
+
+      const editTitleBtn = document.createElement("button");
+      editTitleBtn.className = "secondary";
+      editTitleBtn.type = "button";
+      editTitleBtn.textContent = "Edit Title";
+      editTitleBtn.addEventListener("click", async () => {
+        const next = prompt("Edit point title:", point.name || "Dig Point");
+        if (next === null) return;
+        const cleaned = next.trim() || "Dig Point";
+        await updatePointTitle(point.id, cleaned);
+        setStatus(`Title updated to "${cleaned}".`);
+        await render();
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "danger";
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", async () => {
+        if (confirm("Delete this Dig Point?")) {
+          await deletePoint(point.id);
+          await render();
+        }
+      });
+
+      actions.append(zoomBtn, mapLink);
+      if (showEditTitle.checked) actions.append(editTitleBtn);
+      if (showSavePhoto.checked && point.photo && point.photo.size > 0) actions.append(photoLink);
+      if (showDeletePoint.checked) actions.append(deleteBtn);
+      body.append(actions);
+
+      row.append(img, body);
+      log.append(row);
+    });
+
+    if (bounds.length === 1) {
+      map.setView(bounds[0], 18);
+    } else {
+      map.fitBounds(bounds, { padding: [25, 25] });
+    }
+  }
+
+  document.getElementById("exportBtn").addEventListener("click", async () => {
+    const points = await getAllPoints();
+
+    if (!points.length) {
+      alert("There are no points to export.");
+      return;
+    }
+
+    const rows = [
+      ["ID", "Name", "Location", "Timestamp", "Latitude", "Longitude", "AccuracyMeters", "Notes"]
+    ];
+
+    points
+      .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp))
+      .forEach(p => rows.push([
+        p.id,
+        p.name,
+        p.location || "",
+        p.timestamp,
+        p.latitude,
+        p.longitude,
+        p.accuracy,
+        p.notes
+      ]));
+
+    const csv = rows
+      .map(row => row.map(csvEscape).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dig-points-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  importInput.addEventListener("change", async () => {
+    const file = importInput.files && importInput.files[0];
+    if (!file) return;
+    try {
+      const rows = parseCsv(await file.text());
+      if (rows.length < 2) { alert("No data rows were found in this CSV."); importInput.value=""; return; }
+      const header = rows[0].map(v => v.trim());
+      const idx = name => header.indexOf(name);
+      const required = ["Name","Timestamp","Latitude","Longitude"];
+      const missing = required.filter(name => idx(name) === -1);
+      if (missing.length) { alert("This CSV is missing required columns: " + missing.join(", ")); importInput.value=""; return; }
+      let imported = 0;
+      const tx = db.transaction(STORE,"readwrite");
+      const store = tx.objectStore(STORE);
+      for (const row of rows.slice(1)) {
+        if (!row.length || row.every(v => !String(v).trim())) continue;
+        const lat = Number(row[idx("Latitude")]);
+        const lon = Number(row[idx("Longitude")]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        store.add({
+          name:(row[idx("Name")] || "Dig Point").trim() || "Dig Point",
+          location:idx("Location") >= 0 ? (row[idx("Location")] || "").trim() : "",
+          notes:idx("Notes") >= 0 ? (row[idx("Notes")] || "") : "",
+          timestamp:row[idx("Timestamp")] || new Date().toISOString(),
+          latitude:lat, longitude:lon,
+          accuracy:idx("AccuracyMeters") >= 0 ? Number(row[idx("AccuracyMeters")]) || 0 : 0,
+          photoName:"", photoType:"", photo:new Blob([], {type:"application/octet-stream"}), importedWithoutPhoto:true
+        });
+        imported++;
+      }
+      tx.oncomplete = async () => { setStatus(`${imported} point${imported===1?"":"s"} imported. CSV imports do not include photos.`); importInput.value=""; await render(); };
+      tx.onerror = () => { alert("Could not import the CSV."); importInput.value=""; };
+    } catch (e) { alert("Could not read the CSV file."); importInput.value=""; }
+  });
+
+  function parseCsv(text) {
+    const rows=[]; let row=[]; let value=""; let inQuotes=false;
+    for (let i=0;i<text.length;i++) {
+      const ch=text[i];
+      if (inQuotes) {
+        if (ch==='"' && text[i+1]==='"') { value+='"'; i++; }
+        else if (ch==='"') inQuotes=false;
+        else value+=ch;
+      } else {
+        if (ch==='"') inQuotes=true;
+        else if (ch===',') { row.push(value); value=""; }
+        else if (ch==='\n') { row.push(value.replace(/\r$/, "")); rows.push(row); row=[]; value=""; }
+        else value+=ch;
+      }
+    }
+    if (value.length || row.length) { row.push(value.replace(/\r$/, "")); rows.push(row); }
+    return rows;
+  }
+
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    if (!confirm("Delete ALL saved points and photos from this browser?")) return;
+
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).clear();
+
+    tx.oncomplete = async () => {
+      setStatus("All saved points deleted.");
+      await render();
+    };
+  });
+
+  function csvEscape(value) {
+    const s = String(value ?? "");
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  openDb()
+    .then(render)
+    .catch(() => setStatus("Could not open browser storage."));
+})();
+</script>
+</body>
+</html>
