@@ -1,4 +1,4 @@
-const CACHE_NAME = "dig-point-photo-logger-v2";
+const CACHE_NAME = "dig-point-photo-logger-v2.0.1";
 const APP_SHELL = [
   "./",
   "./index.html",
